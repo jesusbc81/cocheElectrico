@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Aceleración - Firebase</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .meta-info {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+        .contenedor-tabla {
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            width: 100%;
+            max-width: 800px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            text-align: left;
+        }
+        th, td {
+            padding: 12px 15px;
+        }
+        th {
+            background-color: #2980b9;
+            color: white;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+        }
+        tr {
+            border-bottom: 1px solid #dddddd;
+        }
+        tr:nth-of-type(even) {
+            background-color: #f3f3f3;
+        }
+        tr:last-of-type {
+            border-bottom: 2px solid #2980b9;
+        }
+        .badge {
+            background-color: #2ecc71;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .error-msg {
+            color: #e74c3c;
+            font-weight: bold;
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Muestras de Aceleración</h1>
+    <div class="meta-info">Actualizándose automáticamente cada 60 segundos. Última consulta: <span id="registo-tiempo">-</span></div>
+    
+    <div id="mensaje-error" class="error-msg"></div>
+
+    <div class="contenedor-tabla">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID Registro</th>
+                    <th>Eje X</th>
+                    <th>Eje Y</th>
+                    <th>Eje Z</th>
+                    <th>Fecha / Hora</th>
+                </tr>
+            </thead>
+            <tbody id="cuerpo-tabla">
+                <tr>
+                    <td colspan="5" style="text-align: center; color: #95a5a6;">Cargando datos desde Firebase...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // Endpoint REST de tu Firebase en modo GET
+        const ENDPOINT = "https://jbc-app-daw-default-rtdb.europe-west1.firebasedatabase.app/hola.json";
+
+        async function cargarDatosFirebase() {
+            const cuerpoTabla = document.getElementById("cuerpo-tabla");
+            const mensajeError = document.getElementById("mensaje-error");
+            const registroTiempo = document.getElementById("registo-tiempo");
+
+            mensajeError.innerText = ""; // Limpiar errores previos
+
+            try {
+                const respuesta = await fetch(ENDPOINT);
+                
+                if (!respuesta.ok) {
+                    throw new Error(`Error en Firebase: ${respuesta.status} ${respuesta.statusText}`);
+                }
+
+                const datos = await respuesta.json();
+
+                // Si la base de datos está vacía
+                if (!datos) {
+                    cuerpoTabla.innerHTML = `<tr><td colspan="5" style="text-align: center;">No hay datos disponibles en el nodo 'aceleracion'.</td></tr>`;
+                    return;
+                }
+
+                // Convertimos el objeto JSON de Firebase en un Array para poder manipularlo y ordenarlo
+                const listaRegistros = Object.keys(datos).map(key => {
+                    return {
+                        id: key,
+                        ...datos[key]
+                    };
+                });
+
+                // Ordenamos los registros para que los más nuevos (basados en el timestamp) salgan primero
+                listaRegistros.sort((a, b) => b.timestamp - a.timestamp);
+
+                // Limpiamos la tabla antes de renderizar los nuevos datos
+                cuerpoTabla.innerHTML = "";
+
+                // Renderizamos cada fila en el HTML
+                listaRegistros.forEach((registro, indice) => {
+                    const fila = document.createElement("tr");
+
+                    // Formateamos el timestamp a una fecha legible local
+                    const fechaLegible = registro.timestamp 
+                        ? new Date(registro.timestamp).toLocaleString() 
+                        : "Sin fecha";
+
+                    fila.innerHTML = `
+                        <td><span class="badge">${registro.id.substring(0, 8)}...</span></td>
+                        <td>${registro.x.toFixed(2)}</td>
+                        <td>${registro.y.toFixed(2)}</td>
+                        <td>${registro.z.toFixed(2)}</td>
+                        <td>${fechaLegible}</td>
+                    `;
+                    cuerpoTabla.appendChild(fila);
+                });
+
+                // Actualizamos la etiqueta de la última hora de consulta con formato HH:MM:SS
+                const ahora = new Date();
+                registroTiempo.innerText = ahora.toLocaleTimeString();
+
+            } catch (error) {
+                console.error("Error al obtener los datos:", error);
+                mensajeError.innerText = `No se pudieron refrescar los datos: ${error.message}`;
+            }
+        }
+
+        // 1. Primera carga de datos al abrir la página
+        cargarDatosFirebase();
+
+        // 2. Temporizador (Interval) establecido en 60000 milisegundos (1 minuto)
+        setInterval(cargarDatosFirebase, 60000);
+    </script>
+</body>
+</html>
